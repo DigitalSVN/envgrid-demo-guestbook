@@ -66,7 +66,15 @@ php artisan migrate
 php artisan serve
 ```
 
-Optionally seed a few sample entries with `php artisan db:seed`.
+Optionally add a few sample entries with `php artisan db:seed`.
+
+## Seeding previews
+
+To give each preview a few starter entries, add `php artisan db:seed --force` as a custom bootstrap
+command in the EnvGrid dashboard. The seeder writes fixed entries rather than using model factories,
+because previews install with `--no-dev`, so Faker (a dev dependency) isn't available. It's also safe
+to run more than once. The `preview-boot` CI job runs these steps (no-dev install, migrate, seed) on
+every PR.
 
 ### Tests
 
