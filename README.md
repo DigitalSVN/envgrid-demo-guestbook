@@ -23,7 +23,7 @@ appear in another's.
 
 | | |
 |---|---|
-| PHP | 8.4 (the newest version EnvGrid previews support) |
+| PHP | 8.5 |
 | Laravel | 13 |
 | Database | SQLite |
 | Frontend | Plain Blade + inline CSS (no Node / Vite build step) |
@@ -53,9 +53,9 @@ commit an `.env` file or an app key.
 
 ## Running locally
 
-Requires PHP 8.4 or newer with the `pdo_sqlite` extension, and Composer. Dependency resolution is
-pinned to PHP 8.4 via `config.platform.php` in `composer.json`, so `composer update` never pulls in a
-package that EnvGrid's PHP 8.4 preview image can't run, even on a newer local PHP.
+Requires PHP 8.5 with the `pdo_sqlite` extension, and Composer. Dependency resolution is pinned to
+PHP 8.5 via `config.platform.php` in `composer.json`, so `composer update` never pulls in a package
+that EnvGrid's PHP 8.5 preview image can't run, even on a newer local PHP.
 
 ```bash
 composer install
