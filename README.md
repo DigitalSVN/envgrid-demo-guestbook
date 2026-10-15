@@ -8,16 +8,33 @@ A deliberately tiny Laravel app: one page with a "sign the guestbook" form that 
 message to SQLite and lists the latest entries underneath. It exists to show EnvGrid working on a real,
 running Laravel app, with migrations, form posts and a database, not a static export.
 
-## Try it
+## See it in action
 
-1. Open a pull request that makes a visible change. The quickest is recolouring the header: change
-   `--header-bg` at the top of the `<style>` block in
-   [`resources/views/guestbook.blade.php`](resources/views/guestbook.blade.php).
-2. EnvGrid comments on the PR with a preview link once the environment is live.
-3. Open the link and sign the guestbook yourself.
+No setup needed:
+
+1. Browse the [open pull requests](https://github.com/DigitalSVN/envgrid-demo-guestbook/pulls).
+2. Open any of them and find EnvGrid's comment with the preview link.
+3. Click the link and sign the guestbook in that PR's live preview.
 
 Each preview gets its **own throwaway SQLite database**, so entries signed in one PR's preview never
-appear in another's.
+appear in another's or on `main`.
+
+## Try it on your own copy
+
+To watch EnvGrid build a preview for a change *you* make, run it on your own fork. EnvGrid builds
+pull requests within the repository it's installed on, so PRs opened from a fork against this repo
+won't get a preview.
+
+1. [Fork this repository](https://github.com/DigitalSVN/envgrid-demo-guestbook/fork).
+2. Sign up at [envgrid.com](https://www.envgrid.com) and install the EnvGrid GitHub App on your
+   fork. No other configuration is needed (see [How EnvGrid boots it](#how-envgrid-boots-it)).
+3. In your fork, create a branch that makes a visible change. The quickest is recolouring the header:
+   change `--header-bg` at the top of the `<style>` block in
+   [`resources/views/guestbook.blade.php`](resources/views/guestbook.blade.php).
+4. Open a pull request **within your fork**. On GitHub's "Open a pull request" page, set the base
+   repository to *your fork* (it defaults to this upstream repo).
+5. EnvGrid comments on the PR with a preview link once the environment is live. Open it and sign the
+   guestbook.
 
 ## Stack
 
