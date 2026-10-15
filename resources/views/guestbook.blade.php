@@ -6,7 +6,7 @@
     <title>EnvGrid Guestbook</title>
     <style>
         :root {
-            --header-bg: #f54900;
+            --header-bg: #f54901;
             --header-fg: #ffffff;
             --page-bg: #f8fafc;
             --card-bg: #ffffff;
