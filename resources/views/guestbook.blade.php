@@ -32,7 +32,7 @@
             text-align: center;
         }
         header h1 { margin: 0; font-size: 2rem; }
-        header p { margin: 0.5rem 0 0; opacity: 0.9; }
+        header p { margin: 0.5rem 0 0; }
         main { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem; }
         .card {
             background: var(--card-bg);

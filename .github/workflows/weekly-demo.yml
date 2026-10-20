@@ -1,9 +1,10 @@
 name: weekly demo
 
 # Opens a fresh, always-live demo PR every week: a branch off main that recolours the
-# header, opened as a draft PR labelled `weekly-demo`. EnvGrid builds it into a live
-# preview with an empty guestbook; last week's demo PR is then closed (EnvGrid tears its
-# preview down) and its branch deleted.
+# header, opened as a draft PR labelled `weekly-demo`. Once EnvGrid reports the new
+# preview live (and it answers on /up), last week's demo PR is closed (EnvGrid tears its
+# preview down) and its branch deleted. If the new preview fails or doesn't go live in
+# time, the new PR is withdrawn instead and last week's demo stays up.
 
 on:
   schedule:
@@ -28,12 +29,15 @@ env:
   PALETTE: >-
     #dc2626 #c2410c #b45309 #4d7c0f #047857 #0f766e #0e7490
     #0369a1 #2563eb #7c3aed #9333ea #c026d3 #db2777 #e11d48
+  READY_TIMEOUT_SECONDS: 1200
+  POLL_SECONDS: 20
 
 jobs:
   open-weekly-demo:
     # Scheduled runs only on the canonical repo; a fork can still run it manually.
     if: github.event_name == 'workflow_dispatch' || github.repository == 'DigitalSVN/envgrid-demo-guestbook'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
 
@@ -71,7 +75,8 @@ jobs:
         env:
           COLOUR: ${{ steps.pick.outputs.colour }}
         run: |
-          branch="${BRANCH_PREFIX}$(date -u +%G-w%V)-${GITHUB_RUN_NUMBER}"
+          # The run attempt keeps a re-run from colliding with a branch an earlier attempt pushed.
+          branch="${BRANCH_PREFIX}$(date -u +%G-w%V)-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
 
           git switch -c "$branch"
           sed -i -E "s/(--header-bg: )#[0-9a-fA-F]{6};/\1${COLOUR};/" "$VIEW"
@@ -113,6 +118,40 @@ jobs:
           echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      # EnvGrid publishes no commit status or check, only a PR comment it edits in place;
+      # when live it reads "**Preview ready** — <url>" (see PullRequestCommentRenderer in
+      # the EnvGrid app). The preview's /up health check is probed too, so the old demo is
+      # only taken down once the new one demonstrably serves.
+      - name: Wait for the new preview to go live
+        id: live
+        env:
+          NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          deadline=$(( $(date +%s) + READY_TIMEOUT_SECONDS ))
+          while :; do
+            body=$(gh pr view "$NUMBER" --json comments \
+              --jq '[.comments[] | select(.body | contains("Updated automatically on every push"))] | last | .body // ""')
+
+            if grep -q 'Preview ready' <<< "$body"; then
+              url=$(grep -m 1 'Preview ready' <<< "$body" | grep -oE 'https?://[^ )>]+' | head -n 1 || true)
+              if [ -n "$url" ] && curl -fsS -o /dev/null --max-time 20 "${url%/}/up"; then
+                echo "Preview is live: $url"
+                echo "live=true" >> "$GITHUB_OUTPUT"
+                break
+              fi
+              echo "EnvGrid reports ready; waiting for ${url:-the preview URL} to answer on /up"
+            elif grep -qE '\[!(CAUTION|WARNING)\]' <<< "$body"; then
+              echo "::error::EnvGrid reported a problem with the new preview; see the comment on #${NUMBER}"
+              exit 1
+            fi
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::The new preview wasn't live within ${READY_TIMEOUT_SECONDS}s"
+              exit 1
+            fi
+            sleep "$POLL_SECONDS"
+          done
+
       - name: Close previous demo PRs
         env:
           NUMBER: ${{ steps.pr.outputs.number }}
@@ -129,3 +168,20 @@ jobs:
           URL: ${{ steps.pr.outputs.url }}
           COLOUR: ${{ steps.pick.outputs.colour }}
         run: echo "Opened this week's demo PR ${URL} with header colour \`${COLOUR}\`." >> "$GITHUB_STEP_SUMMARY"
+
+      # On a failure after the branch was pushed but before the new preview was confirmed
+      # live: withdraw the new PR (or delete the orphaned branch if the PR never opened),
+      # leaving last week's demo untouched. A live new demo is never withdrawn.
+      - name: Withdraw this week's demo after a failure
+        if: failure() && steps.branch.outputs.branch != '' && steps.live.outputs.live != 'true'
+        env:
+          NUMBER: ${{ steps.pr.outputs.number }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: |
+          if [ -n "$NUMBER" ]; then
+            gh pr close "$NUMBER" --delete-branch \
+              --comment "Withdrawn: this preview didn't go live, so last week's demo stays up. See the workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          else
+            git push origin --delete "$BRANCH"
+          fi
+          echo "This week's demo was withdrawn; last week's demo PR was left open." >> "$GITHUB_STEP_SUMMARY"

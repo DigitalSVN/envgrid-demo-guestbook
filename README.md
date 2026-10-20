@@ -113,16 +113,25 @@ every PR.
 demo open at all times. Every Monday at 08:47 UTC, and whenever it's run manually from the
 **Actions** tab ("weekly demo" → **Run workflow**), it:
 
-1. branches off `main` as `weekly-demo/<year>-w<week>-<run>` and changes only `--header-bg` to a random
-   colour from a vibrant palette. Every colour keeps the white header text at WCAG AA contrast, and
-   it never repeats `main`'s colour or last week's;
+1. branches off `main` as `weekly-demo/<year>-w<week>-<run>-<attempt>` and changes only `--header-bg`
+   to a random colour from a vibrant palette. Every colour keeps the white header text at WCAG AA
+   contrast, and it never repeats `main`'s colour or last week's;
 2. opens a **draft** PR titled e.g. *Weekly demo · 2026 week 43 · #e11d48*, labelled `weekly-demo`.
    It's a draft so it can't be merged by accident. EnvGrid builds drafts like any other PR;
-3. closes the previous `weekly-demo` PRs (only those on `weekly-demo/` branches) with a "superseded"
-   comment and deletes their branches. EnvGrid then tears their previews down.
+3. waits, for up to 20 minutes, until the new preview is live: EnvGrid's PR comment says
+   **Preview ready** *and* the preview answers on `/up`;
+4. only then closes the previous `weekly-demo` PRs (only those on `weekly-demo/` branches) with a
+   "superseded" comment and deletes their branches. EnvGrid then tears their previews down.
 
-The new PR is opened *before* the old one is closed, so there's no gap while the new preview boots.
-It briefly uses two of the account's open-PR slots, and about 52 PRs a year of its quota.
+There's never a gap with no working demo: last week's preview stays up until the new one serves. If
+the new preview fails, EnvGrid reports a problem, or it isn't live within 20 minutes, the new PR is
+withdrawn (closed with a link to the run), last week's demo stays open, and the run fails so you
+notice. Each run briefly uses two of the account's open-PR slots, and about 52 PRs a year of its
+quota.
+
+The readiness check relies on EnvGrid's PR comment wording ("Preview ready", and the "Updated
+automatically on every push" footer). If that wording changes in EnvGrid, update the "Wait for the
+new preview to go live" step to match.
 
 One-time setup: in **Settings → Actions → General**, enable **Allow GitHub Actions to create and
 approve pull requests**. Without it, the "Open the demo PR" step fails.
