@@ -10,14 +10,14 @@ running Laravel app, with migrations, form posts and a database, not a static ex
 
 ## See it in action
 
-No setup needed:
+No setup needed. A fresh demo pull request is opened every week, each with a different header colour:
 
-1. Browse the [open pull requests](https://github.com/DigitalSVN/envgrid-demo-guestbook/pulls).
-2. Open any of them and find EnvGrid's comment with the preview link.
+1. Open [**this week's demo PR**](https://github.com/DigitalSVN/envgrid-demo-guestbook/pulls?q=is%3Apr+is%3Aopen+label%3Aweekly-demo).
+2. Find EnvGrid's comment with the preview link.
 3. Click the link and sign the guestbook in that PR's live preview.
 
 Each preview gets its **own throwaway SQLite database**, so entries signed in one PR's preview never
-appear in another's or on `main`.
+appear in another's or on `main`, and each week's demo starts with an empty guestbook.
 
 ## Try it on your own copy
 
@@ -35,6 +35,10 @@ won't get a preview.
    repository to *your fork* (it defaults to this upstream repo).
 5. EnvGrid comments on the PR with a preview link once the environment is live. Open it and sign the
    guestbook.
+
+Alternatively, skip steps 3–4: enable Actions on your fork and run the
+[weekly demo workflow](#weekly-demo-pr) from your fork's **Actions** tab, and it opens a demo PR for
+you. Scheduled runs only happen on this repo, so it won't keep running weekly on your fork.
 
 ## Stack
 
@@ -85,14 +89,6 @@ php artisan serve
 
 Optionally add a few sample entries with `php artisan db:seed`.
 
-## Seeding previews
-
-To give each preview a few starter entries, add `php artisan db:seed --force` as a custom bootstrap
-command in the EnvGrid dashboard. The seeder writes fixed entries rather than using model factories,
-because previews install with `--no-dev`, so Faker (a dev dependency) isn't available. It's also safe
-to run more than once. The `preview-boot` CI job runs these steps (no-dev install, migrate, seed) on
-every PR.
-
 ### Tests
 
 ```bash
@@ -102,6 +98,37 @@ php artisan test
 To check the app the way a preview runs it (production mode), set `APP_ENV=production` and
 `APP_DEBUG=false` in `.env` and reload the page. A boot error then shows up as a bare 500 instead of
 a stack trace.
+
+## Seeding previews
+
+To give each preview a few starter entries, add `php artisan db:seed --force` as a custom bootstrap
+command in the EnvGrid dashboard. The seeder writes fixed entries rather than using model factories,
+because previews install with `--no-dev`, so Faker (a dev dependency) isn't available. It's also safe
+to run more than once. The `preview-boot` CI job runs these steps (no-dev install, migrate, seed) on
+every PR.
+
+## Weekly demo PR
+
+[`.github/workflows/weekly-demo.yml`](.github/workflows/weekly-demo.yml) keeps an up-to-date live
+demo open at all times. Every Monday at 08:47 UTC, and whenever it's run manually from the
+**Actions** tab ("weekly demo" → **Run workflow**), it:
+
+1. branches off `main` as `weekly-demo/<year>-w<week>-<run>` and changes only `--header-bg` to a random
+   colour from a vibrant palette. Every colour keeps the white header text at WCAG AA contrast, and
+   it never repeats `main`'s colour or last week's;
+2. opens a **draft** PR titled e.g. *Weekly demo · 2026 week 43 · #e11d48*, labelled `weekly-demo`.
+   It's a draft so it can't be merged by accident. EnvGrid builds drafts like any other PR;
+3. closes the previous `weekly-demo` PRs (only those on `weekly-demo/` branches) with a "superseded"
+   comment and deletes their branches. EnvGrid then tears their previews down.
+
+The new PR is opened *before* the old one is closed, so there's no gap while the new preview boots.
+It briefly uses two of the account's open-PR slots, and about 52 PRs a year of its quota.
+
+One-time setup: in **Settings → Actions → General**, enable **Allow GitHub Actions to create and
+approve pull requests**. Without it, the "Open the demo PR" step fails.
+
+PRs opened with the workflow's built-in `GITHUB_TOKEN` don't trigger other workflows, so the `tests`
+CI doesn't run on demo PRs. That's fine, since they only change a colour.
 
 ## License
 

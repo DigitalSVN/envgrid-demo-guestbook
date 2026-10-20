@@ -1,0 +1,131 @@
+name: weekly demo
+
+# Opens a fresh, always-live demo PR every week: a branch off main that recolours the
+# header, opened as a draft PR labelled `weekly-demo`. EnvGrid builds it into a live
+# preview with an empty guestbook; last week's demo PR is then closed (EnvGrid tears its
+# preview down) and its branch deleted.
+
+on:
+  schedule:
+    - cron: '47 8 * * 1' # Mondays 08:47 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: weekly-demo
+  cancel-in-progress: false
+
+env:
+  LABEL: weekly-demo
+  BRANCH_PREFIX: weekly-demo/
+  VIEW: resources/views/guestbook.blade.php
+  # Vibrant colours that all keep the white header text at WCAG AA contrast (>= 4.5:1).
+  # main's own indigo (#4f46e5) is deliberately absent so a demo always looks different.
+  PALETTE: >-
+    #dc2626 #c2410c #b45309 #4d7c0f #047857 #0f766e #0e7490
+    #0369a1 #2563eb #7c3aed #9333ea #c026d3 #db2777 #e11d48
+
+jobs:
+  open-weekly-demo:
+    # Scheduled runs only on the canonical repo; a fork can still run it manually.
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'DigitalSVN/envgrid-demo-guestbook'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      # Scheduled runs carry no repository payload, so the default branch is looked up
+      # explicitly rather than read from github.event.
+      - name: Find the default branch
+        run: echo "BASE=$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef --jq .defaultBranchRef.name)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE }}
+
+      - name: Pick this week's colour
+        id: pick
+        run: |
+          current=$(grep -oE -- '--header-bg: #[0-9a-fA-F]{6}' "$VIEW" | grep -oE '#[0-9a-fA-F]{6}' | tr 'A-F' 'a-f' || true)
+          if [ -z "$current" ]; then
+            echo "::error::Could not find '--header-bg: #rrggbb' in $VIEW"
+            exit 1
+          fi
+
+          previous=$(gh pr list --label "$LABEL" --state all --limit 1 --json title --jq '.[0].title // ""' \
+            | grep -oE '#[0-9a-fA-F]{6}' | tr 'A-F' 'a-f' || true)
+
+          colour=$(for c in $PALETTE; do
+            if [ "$c" != "$current" ] && [ "$c" != "$previous" ]; then echo "$c"; fi
+          done | shuf -n 1)
+
+          echo "main: $current, last demo: ${previous:-none}, this week: $colour"
+          echo "colour=$colour" >> "$GITHUB_OUTPUT"
+
+      - name: Create the demo branch
+        id: branch
+        env:
+          COLOUR: ${{ steps.pick.outputs.colour }}
+        run: |
+          branch="${BRANCH_PREFIX}$(date -u +%G-w%V)-${GITHUB_RUN_NUMBER}"
+
+          git switch -c "$branch"
+          sed -i -E "s/(--header-bg: )#[0-9a-fA-F]{6};/\1${COLOUR};/" "$VIEW"
+          if ! grep -q -- "--header-bg: ${COLOUR};" "$VIEW"; then
+            echo "::error::Failed to set --header-bg to ${COLOUR} in $VIEW"
+            exit 1
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          git commit -am "Weekly demo: recolour the header to ${COLOUR}"
+          git push origin "$branch"
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open the demo PR
+        id: pr
+        env:
+          COLOUR: ${{ steps.pick.outputs.colour }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: |
+          gh label create "$LABEL" --force --color 4f46e5 \
+            --description 'Automated weekly EnvGrid demo PR (opened and closed by the weekly-demo workflow)'
+
+          title="Weekly demo · $(date -u +%G) week $((10#$(date -u +%V))) · ${COLOUR}"
+
+          cat > "$RUNNER_TEMP/body.md" <<EOF
+          This week's live **[EnvGrid](https://www.envgrid.com)** demo.
+
+          It's an ordinary pull request that recolours the guestbook header to \`${COLOUR}\`. EnvGrid builds it into a live preview with its own empty database. **Look for EnvGrid's comment below for the preview link**, then sign the guestbook.
+
+          This PR is opened automatically every week by the [weekly demo workflow](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${BASE}/.github/workflows/weekly-demo.yml) and closed when next week's demo replaces it. It's a draft on purpose: please don't merge it.
+          EOF
+
+          url=$(gh pr create --draft --base "$BASE" --head "$BRANCH" --label "$LABEL" \
+            --title "$title" --body-file "$RUNNER_TEMP/body.md")
+
+          echo "Opened $url"
+          echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Close previous demo PRs
+        env:
+          NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          gh pr list --label "$LABEL" --state open --limit 100 --json number,headRefName \
+            --jq ".[] | select(.number != ${NUMBER}) | select(.headRefName | startswith(env.BRANCH_PREFIX)) | .number" \
+          | while read -r previous; do
+              echo "Closing #$previous"
+              gh pr close "$previous" --delete-branch --comment "Superseded by #${NUMBER}, this week's demo."
+            done
+
+      - name: Summary
+        env:
+          URL: ${{ steps.pr.outputs.url }}
+          COLOUR: ${{ steps.pick.outputs.colour }}
+        run: echo "Opened this week's demo PR ${URL} with header colour \`${COLOUR}\`." >> "$GITHUB_STEP_SUMMARY"
